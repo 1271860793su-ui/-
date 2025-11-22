@@ -3,144 +3,262 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>第25太阳活动周预测 (实时Web版)</title>
+    <title>第25太阳活动周预测 (本地数据导入)</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
-        .status { text-align: center; color: #666; font-size: 0.9em; margin-bottom: 20px; }
-        #chart { width: 100%; height: 600px; }
-        .note { font-size: 0.8em; color: #888; margin-top: 10px; text-align: center; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; padding: 20px; 
+            background: #f5f5f5; 
+            color: #333;
+        }
+        .container { 
+            max-width: 1100px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); 
+        }
+        h1 { 
+            text-align: center; 
+            color: #1a1a1a; 
+            margin-bottom: 5px;
+        }
+        .controls { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            border-bottom: 1px solid #eee; 
+            padding-bottom: 20px;
+        }
+        #fileInput { 
+            padding: 10px; 
+            border: 2px dashed #007bff; 
+            border-radius: 6px; 
+            cursor: pointer;
+            background: #f8faff;
+        }
+        .status { 
+            margin-top: 15px; 
+            font-weight: 600; 
+            color: #007bff; 
+        }
+        #chart { 
+            width: 100%; 
+            height: 650px; 
+        }
+        .note { 
+            font-size: 0.8em; 
+            color: #888; 
+            margin-top: 20px; 
+            text-align: center; 
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>☀ 第25太阳活动周 - 统计外推预测</h1>
-    <div class="status" id="status">正在连接 SILSO 获取最新数据...</div>
+    <h1>🚀 第25太阳活动周预测</h1>
+    <div class="controls">
+        <label for="fileInput" class="custom-file-upload">
+            <input type="file" id="fileInput" accept=".txt">
+        </label>
+        <div class="status" id="status">请导入本地 SN_m_tot_V2.0.txt 文件以开始预测</div>
+    </div>
+    
     <div id="chart"></div>
-    <div class="note">数据源: SILSO (Royal Observatory of Belgium) | 算法: Hathaway Function w/ Fixed Parameters</div>
+    
+    <div class="note">
+        算法: 峰值锚定指数衰减模型 (Statistical Extrapolation)。基于导入数据计算平滑值和峰值，预测下降趋势。<br>
+        请注意：太阳周期预测有固有不确定性，此为统计模型估算结果。
+    </div>
 </div>
 
 <script>
-    // 1. Hathaway 模型函数 (模拟太阳周期形状)
-    function hathaway(t, a, b, t0) {
-        const tau = t - t0;
-        if (tau <= 0) return 0;
-        return a * Math.pow(tau, 3) / Math.exp(Math.pow(tau, 2) / Math.pow(b, 2));
+    document.getElementById('fileInput').addEventListener('change', handleFileSelect, false);
+
+    // 周期相关参数
+    const CYCLE_START_YEAR = 2019.9; // 第25周期起始点
+    const CYCLE_END_YEAR = 2030;     // 预计周期结束时间
+    const SMOOTHING_WINDOW = 13;     // 13个月滑动平均
+
+    // ====================================================================
+    // 1. 文件处理与数据解析
+    // ====================================================================
+    function handleFileSelect(evt) {
+        const file = evt.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('status').textContent = '文件已加载，正在计算...';
+            const text = e.target.result;
+            try {
+                const parsedData = parseData(text);
+                if (parsedData.years.length > 0) {
+                    runPrediction(parsedData);
+                } else {
+                    document.getElementById('status').textContent = '错误: 文件中未找到有效的黑子数据。';
+                }
+            } catch (error) {
+                document.getElementById('status').textContent = `解析失败: ${error.message}`;
+            }
+        };
+        reader.readAsText(file);
     }
 
-    // 2. 主逻辑
-    async function init() {
-        const statusDiv = document.getElementById('status');
+    function parseData(text) {
+        const lines = text.trim().split('\n');
+        const data = { years: [], ssn: [], ssnSmooth: [] };
+        let tempWindow = [];
         
-        try {
-            // 获取数据 (使用 CORS 代理以确保在网页中能访问 SILSO 数据)
-            const response = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.txt'));
-            const text = await response.text();
+        lines.forEach(line => {
+            // 匹配空格或制表符
+            const parts = line.trim().split(/\s+/).filter(p => p.length > 0); 
             
-            // 解析数据
-            const lines = text.trim().split('\n');
-            const years = [];
-            const ssn = [];
-            const ssnSmooth = [];
-            
-            // 简单的移动平均计算数组
-            let tempWindow = [];
-            
-            lines.forEach(line => {
-                const parts = line.trim().split(/\s+/);
+            // 确保行数据足够且不是注释行
+            if (parts.length >= 4 && !line.startsWith('#')) {
                 const fracYear = parseFloat(parts[2]);
                 const val = parseFloat(parts[3]);
                 
-                // 只取 2018 年之后的数据以减少图表负载
-                if (fracYear >= 2018) {
-                    years.push(fracYear);
-                    ssn.push(val);
+                // 仅处理第25周期数据
+                if (fracYear >= CYCLE_START_YEAR) {
+                    data.years.push(fracYear);
+                    data.ssn.push(val);
                     
-                    // 简单的平滑处理 (13个月)
+                    // 计算滑动平均
                     tempWindow.push(val);
-                    if (tempWindow.length > 13) tempWindow.shift();
+                    if (tempWindow.length > SMOOTHING_WINDOW) tempWindow.shift();
                     
-                    if (tempWindow.length === 13) {
-                        const sum = tempWindow.reduce((a, b) => a + b, 0);
-                        ssnSmooth.push(sum / 13);
-                    } else {
-                        ssnSmooth.push(val); // 初期填充
-                    }
-                }
-            });
-
-            // === 预测参数设置 ===
-            // 注意：由于 JS 难以进行复杂的非线性最小二乘拟合，
-            // 这里我们使用基于 Python 分析得出的第25周期最佳拟合参数
-            const param_a = 158;   // 振幅
-            const param_b = 6.2;   // 宽度
-            const param_t0 = 2019.9; // 起始时间
-
-            // 生成预测数据 (到2032年)
-            const futureYears = [];
-            const futureSSN = [];
-            let peakVal = 0;
-            let peakDate = 0;
-
-            for (let t = 2019; t <= 2032; t += 0.05) {
-                const val = hathaway(t, param_a, param_b, param_t0);
-                futureYears.push(t);
-                futureSSN.push(val);
-                if (val > peakVal) {
-                    peakVal = val;
-                    peakDate = t;
+                    const sum = tempWindow.reduce((a, b) => a + b, 0);
+                    // 仅在窗口达到13个月时才计算平滑值，否则使用当前值
+                    data.ssnSmooth.push(tempWindow.length === SMOOTHING_WINDOW ? (sum / SMOOTHING_WINDOW) : val);
                 }
             }
-
-            // 绘制图表
-            const traceRaw = {
-                x: years, y: ssn,
-                mode: 'markers', name: '实际月均值',
-                marker: { color: '#ccc', size: 4 }
-            };
-
-            const traceSmooth = {
-                x: years, y: ssnSmooth,
-                mode: 'lines', name: '平滑观测值',
-                line: { color: 'royalblue', width: 2 }
-            };
-
-            const tracePred = {
-                x: futureYears, y: futureSSN,
-                mode: 'lines', name: '统计预测 (趋势)',
-                line: { color: 'firebrick', width: 3, dash: 'dot' }
-            };
-
-            const tracePeak = {
-                x: [peakDate], y: [peakVal],
-                mode: 'markers+text', name: '预测峰值',
-                text: [`峰值: ${Math.round(peakVal)}`],
-                textposition: 'top center',
-                marker: { color: 'red', size: 10, symbol: 'star' }
-            };
-
-            const layout = {
-                title: '第25太阳活动周进展与预测',
-                xaxis: { title: '年份', range: [2019, 2032] },
-                yaxis: { title: '黑子数 (SSN)' },
-                hovermode: 'x unified',
-                showlegend: true,
-                legend: { x: 1, xanchor: 'right', y: 1 }
-            };
-
-            Plotly.newPlot('chart', [traceRaw, traceSmooth, tracePred, tracePeak], layout);
-            statusDiv.innerHTML = `数据已更新至: ${new Date().toLocaleDateString()} | 预测峰值约在 ${Math.floor(peakDate)}年底`;
-
-        } catch (error) {
-            statusDiv.innerHTML = `❌ 获取数据失败 (可能是网络或跨域限制): ${error.message}`;
-            console.error(error);
-        }
+        });
+        return data;
     }
 
-    init();
+    // ====================================================================
+    // 2. 预测模型 (峰值锚定指数衰减)
+    // ====================================================================
+    function extrapolatePrediction(data) {
+        // 找到观测到的平滑峰值和时间
+        let observedPeakVal = 0;
+        let observedPeakTime = 0;
+        let peakIndex = 0;
+
+        for (let i = 0; i < data.ssnSmooth.length; i++) {
+            if (data.ssnSmooth[i] > observedPeakVal) {
+                observedPeakVal = data.ssnSmooth[i];
+                observedPeakTime = data.years[i];
+                peakIndex = i;
+            }
+        }
+
+        // 1. 确定衰减系数 (Tau): 决定下降速度，这里固定为一个合理值 (例如5.5年衰减常数)
+        const TAU = 5.5; 
+        
+        // 2. 生成预测数据
+        const predYears = [...data.years];
+        const predSSN = [...data.ssnSmooth]; 
+        
+        let lastObservedTime = data.years[data.years.length - 1];
+        let nextTime = lastObservedTime;
+        let nextSSN = data.ssnSmooth[data.ssnSmooth.length - 1];
+        
+        // 从观测结束点开始预测直到周期结束
+        while (nextTime < CYCLE_END_YEAR) {
+            nextTime += 1 / 12; // 增加一个月
+            
+            // 使用指数衰减模型预测 (基于最后观察到的峰值)
+            // SSN(t) = Peak * exp(-(t - PeakTime) / TAU)
+            const timeSincePeak = nextTime - observedPeakTime;
+            
+            // 仅对峰值后的时间应用衰减模型
+            if (timeSincePeak > 0) {
+                 nextSSN = observedPeakVal * Math.exp(-timeSincePeak / TAU);
+            } else {
+                // 如果预测点还在峰值前（理论上不应该发生，但为安全起见），保持稳定
+                nextSSN = observedPeakVal; 
+            }
+            
+            if (nextSSN < 5) nextSSN = 0; // 强制最小值为0
+            
+            predYears.push(nextTime);
+            predSSN.push(nextSSN);
+        }
+        
+        document.getElementById('status').innerHTML = `计算完成！观测峰值: ${observedPeakVal.toFixed(1)} @ ${observedPeakTime.toFixed(2)}`;
+
+        return { predYears, predSSN, observedPeakTime, observedPeakVal };
+    }
+
+
+    // ====================================================================
+    // 3. 绘图
+    // ====================================================================
+    function runPrediction(data) {
+        const { predYears, predSSN, observedPeakTime, observedPeakVal } = extrapolatePrediction(data);
+        
+        // 区分观测和预测数据
+        const lastObservedIndex = data.years.length - 1;
+
+        const observedPredYears = predYears.slice(0, lastObservedIndex + 1);
+        const observedPredSSN = predSSN.slice(0, lastObservedIndex + 1);
+        
+        const futurePredYears = predYears.slice(lastObservedIndex);
+        const futurePredSSN = predSSN.slice(lastObservedIndex);
+
+        const traceRaw = {
+            x: data.years, y: data.ssn,
+            mode: 'markers', name: '原始月均值',
+            marker: { color: 'rgba(51, 51, 51, 0.4)', size: 4 },
+            hovertemplate: '<b>原始SSN:</b> %{y:.1f}<br><b>年份:</b> %{x:.2f}<extra></extra>'
+        };
+
+        const traceSmooth = {
+            x: data.years, y: data.ssnSmooth,
+            mode: 'lines', name: '平滑观测值 (输入)',
+            line: { color: '#2a5fd8', width: 3 },
+            hovertemplate: '<b>平滑SSN:</b> %{y:.1f}<br><b>年份:</b> %{x:.2f}<extra></extra>'
+        };
+
+        const traceFuture = {
+            x: futurePredYears, y: futurePredSSN,
+            mode: 'lines', name: '统计外推预测',
+            line: { color: '#e63946', width: 3, dash: 'dash' },
+            hovertemplate: '<b>预测SSN:</b> %{y:.1f}<br><b>年份:</b> %{x:.2f}<extra></extra>'
+        };
+        
+        // 标注峰值
+        const tracePeak = {
+            x: [observedPeakTime], y: [observedPeakVal],
+            mode: 'markers+text', name: '观测峰值点',
+            text: [`峰值: ${observedPeakVal.toFixed(0)}`], textposition: 'top center',
+            marker: { color: '#e63946', size: 10, symbol: 'star' },
+            hoverinfo: 'skip'
+        };
+
+
+        const layout = {
+            title: {
+                text: `第25太阳活动周预测 (数据更新至 ${data.years[data.years.length - 1].toFixed(2)} 年)`,
+                font: { size: 20, color: '#1a1a1a' }
+            },
+            xaxis: { title: '年份', range: [2019, CYCLE_END_YEAR + 0.5] },
+            yaxis: { title: '太阳黑子数 (SSN)', zeroline: true, zerolinewidth: 2, zerolinecolor: '#ccc' },
+            template: 'plotly_white',
+            hovermode: 'x unified',
+            legend: { orientation: "h", y: 1.05, yanchor: "bottom", x: 0.5, xanchor: "center" }
+        };
+
+        Plotly.newPlot('chart', [traceRaw, traceSmooth, traceFuture, tracePeak], layout);
+    }
+    
+    // 初始化时显示一个空图
+    Plotly.newPlot('chart', [], { title: '等待导入数据...', xaxis: { title: '年份' }, yaxis: { title: 'SSN' } });
+
 </script>
 
 </body>
