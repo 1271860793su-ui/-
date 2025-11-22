@@ -3,84 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>第25太阳活动周预测 (本地数据导入)</title>
+    <title>Similar Cycles法太阳黑子预测</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
+        /* Base Styling */
+        :root {
+            --primary-purple: #6c70fb; /* Similar to header color in image */
+            --light-bg: #f8f8fa; /* Light background for the page */
+            --card-bg: #ffffff;
+            --text-dark: #2a2a2a;
+            --text-light: #444;
+            --shadow-subtle: 0 4px 10px rgba(0, 0, 0, 0.06);
+            --border-radius: 12px;
+        }
+
         body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; 
             margin: 0; padding: 20px; 
-            background: #f5f5f5; 
-            color: #333;
+            background: var(--light-bg); 
+            color: var(--text-dark);
+            display: flex;
+            justify-content: center;
         }
-        .container { 
-            max-width: 1100px; 
-            margin: 0 auto; 
-            background: white; 
+        .main-container { 
+            width: 100%;
+            max-width: 1200px; 
+            background: var(--card-bg); 
             padding: 30px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); 
+            border-radius: var(--border-radius); 
+            box-shadow: var(--shadow-subtle); 
         }
-        h1 { 
-            text-align: center; 
-            color: #1a1a1a; 
-            margin-bottom: 5px;
-        }
-        .controls { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            border-bottom: 1px solid #eee; 
+
+        /* Header Area (Mimics the Purple Header) */
+        .header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             padding-bottom: 20px;
+            margin-bottom: 25px;
         }
-        #fileInput { 
-            padding: 10px; 
-            border: 2px dashed #007bff; 
-            border-radius: 6px; 
+        .header-section h1 {
+            font-size: 1.8em;
+            color: var(--primary-purple);
+            margin: 0;
+        }
+
+        /* Import Button Styling (Mimics the Top Right Button) */
+        .import-button-container {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        .import-button-container input[type=file] {
+            position: absolute;
+            top: 0;
+            right: 0;
+            min-width: 100%;
+            min-height: 100%;
+            opacity: 0;
             cursor: pointer;
-            background: #f8faff;
         }
-        .status { 
-            margin-top: 15px; 
-            font-weight: 600; 
-            color: #007bff; 
+        .import-button {
+            background-color: var(--primary-purple);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 4px rgba(108, 112, 251, 0.4);
         }
+        .import-button:hover {
+            background-color: #5a5ed8;
+        }
+
+        /* Control and Status Section */
+        .control-status {
+            padding: 15px;
+            background-color: #f0f4ff; /* Light blue background for controls */
+            border-radius: var(--border-radius);
+            margin-bottom: 25px;
+            border: 1px solid #d0daff;
+        }
+        .control-status p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: 0.9em;
+        }
+        .status-text {
+            font-weight: 600;
+            color: var(--primary-purple);
+        }
+
+        /* Information Cards (Mimics the Blue/Pink/White Boxes) */
+        .card-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .info-card {
+            padding: 15px 20px;
+            border-radius: 8px;
+        }
+
+        /* 预测说明 Card (Blue/Light Blue) */
+        .description-card {
+            background-color: #e6f1ff;
+            border: 1px solid #cce0ff;
+        }
+        .description-card h3 {
+            color: #007bff;
+            margin-top: 0;
+            font-size: 1.1em;
+        }
+
+        /* 原理与步骤 Card (White/Plain) */
+        .principle-card {
+            background-color: var(--card-bg);
+            border: 1px solid #e0e0e0;
+        }
+        .principle-card h3 {
+            color: var(--secondary-color);
+            margin-top: 0;
+            font-size: 1.1em;
+        }
+        .principle-card ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .principle-card ul li {
+            margin-bottom: 8px;
+            padding-left: 15px;
+            position: relative;
+        }
+        .principle-card ul li::before {
+            content: "•";
+            color: var(--primary-purple);
+            font-weight: bold;
+            display: inline-block;
+            width: 1em;
+            margin-left: -1em;
+        }
+
+        /* 数据来源 Card (Pink/Red) */
+        .source-card {
+            background-color: #fff0f0;
+            border: 1px solid #ffdada;
+        }
+        .source-card p {
+            color: #d84545;
+            font-size: 0.9em;
+        }
+
+        /* Chart Area */
         #chart { 
             width: 100%; 
-            height: 650px; 
-        }
-        .note { 
-            font-size: 0.8em; 
-            color: #888; 
-            margin-top: 20px; 
-            text-align: center; 
+            min-height: 600px; 
+            margin-top: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: var(--shadow-subtle);
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>🚀 第25太阳活动周预测</h1>
-    <div class="controls">
-        <label for="fileInput" class="custom-file-upload">
+<div class="main-container">
+    <div class="header-section">
+        <h1>Similar Cycles法太阳黑子预测</h1>
+        <div class="import-button-container">
+            <label for="fileInput" class="import-button">
+                <span style="font-size: 1.2em;">⬆</span> 导入 SILSO 数据
+            </label>
             <input type="file" id="fileInput" accept=".txt">
-        </label>
-        <div class="status" id="status">请导入本地 SN_m_tot_V2.0.txt 文件以开始预测</div>
+        </div>
     </div>
     
+    <div class="control-status">
+        <p>调入导入 SILSO 数据源文件 (<span style="font-family: monospace;">SN_m_tot_V2.0.txt</span>)</p>
+        <p class="status-text" id="status">等待导入文件...</p>
+    </div>
+
+    <div class="card-grid">
+        <div class="info-card description-card">
+            <h3>预测说明</h3>
+            <p>预测结果基于导入的 SILSO 观测数据计算平滑值、确定周期峰值，并通过统计外推模型（峰值锚定指数衰减）模拟未来下降走势。</p>
+            <p>数据格式要求: 必须是 SILSO 标准的空格分隔文件。</p>
+        </div>
+    </div>
+    
+    <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="info-card principle-card">
+            <h3>Similar Cycles法原理 (统计替代实现)</h3>
+            <p>本次实现采用以下统计替代方法来模拟相似周期法的预测效果：</p>
+            <ul>
+                <li>基本思想：通过对过去周期形状的分析，确定当前周期可能跟随的平均或特定趋势，从而预测未来走势。</li>
+                <li>实现步骤：
+                    <ul>
+                        <li>1. 计算导入数据中 13 个月的平滑月黑子数。</li>
+                        <li>2. 确定观测到的**平滑峰值**及其发生时间。</li>
+                        <li>3. 预测从该峰值点开始，采用**指数衰减模型**进行统计外推。</li>
+                        <li>4. 模型的衰减速度 (Tau) 基于历史周期平均衰减速度估算，而非实时拟合。</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="info-card source-card">
+            <h3>数据来源</h3>
+            <p>SILSO (Sunspot Index and Long-term Solar Observations) - 比利时皇家天文台太阳黑子数数据。</p>
+            <p>此预测模型仅供参考，不代表官方发布结果。</p>
+        </div>
+    </div>
+    
+
     <div id="chart"></div>
-    
-    <div class="note">
-        算法: 峰值锚定指数衰减模型 (Statistical Extrapolation)。基于导入数据计算平滑值和峰值，预测下降趋势。<br>
-        请注意：太阳周期预测有固有不确定性，此为统计模型估算结果。
-    </div>
+
 </div>
 
 <script>
     document.getElementById('fileInput').addEventListener('change', handleFileSelect, false);
 
-    // 周期相关参数
-    const CYCLE_START_YEAR = 2019.9; // 第25周期起始点
-    const CYCLE_END_YEAR = 2030;     // 预计周期结束时间
-    const SMOOTHING_WINDOW = 13;     // 13个月滑动平均
+    // Constants (保持和上次预测算法一致)
+    const CYCLE_START_YEAR = 2019.9; 
+    const CYCLE_END_YEAR = 2030;     
+    const SMOOTHING_WINDOW = 13;     
 
     // ====================================================================
     // 1. 文件处理与数据解析
@@ -113,25 +263,20 @@
         let tempWindow = [];
         
         lines.forEach(line => {
-            // 匹配空格或制表符
             const parts = line.trim().split(/\s+/).filter(p => p.length > 0); 
             
-            // 确保行数据足够且不是注释行
             if (parts.length >= 4 && !line.startsWith('#')) {
                 const fracYear = parseFloat(parts[2]);
                 const val = parseFloat(parts[3]);
                 
-                // 仅处理第25周期数据
                 if (fracYear >= CYCLE_START_YEAR) {
                     data.years.push(fracYear);
                     data.ssn.push(val);
                     
-                    // 计算滑动平均
                     tempWindow.push(val);
                     if (tempWindow.length > SMOOTHING_WINDOW) tempWindow.shift();
                     
                     const sum = tempWindow.reduce((a, b) => a + b, 0);
-                    // 仅在窗口达到13个月时才计算平滑值，否则使用当前值
                     data.ssnSmooth.push(tempWindow.length === SMOOTHING_WINDOW ? (sum / SMOOTHING_WINDOW) : val);
                 }
             }
@@ -140,50 +285,42 @@
     }
 
     // ====================================================================
-    // 2. 预测模型 (峰值锚定指数衰减)
+    // 2. 预测模型 (峰值锚定指数衰减 - Similar Cycles统计替代)
     // ====================================================================
     function extrapolatePrediction(data) {
-        // 找到观测到的平滑峰值和时间
         let observedPeakVal = 0;
         let observedPeakTime = 0;
-        let peakIndex = 0;
 
         for (let i = 0; i < data.ssnSmooth.length; i++) {
             if (data.ssnSmooth[i] > observedPeakVal) {
                 observedPeakVal = data.ssnSmooth[i];
                 observedPeakTime = data.years[i];
-                peakIndex = i;
             }
         }
 
-        // 1. 确定衰减系数 (Tau): 决定下降速度，这里固定为一个合理值 (例如5.5年衰减常数)
+        // 衰减常数 (Tau): 决定下降速度 (e.g., 5.5年)
         const TAU = 5.5; 
         
-        // 2. 生成预测数据
         const predYears = [...data.years];
         const predSSN = [...data.ssnSmooth]; 
         
         let lastObservedTime = data.years[data.years.length - 1];
         let nextTime = lastObservedTime;
-        let nextSSN = data.ssnSmooth[data.ssnSmooth.length - 1];
         
-        // 从观测结束点开始预测直到周期结束
         while (nextTime < CYCLE_END_YEAR) {
             nextTime += 1 / 12; // 增加一个月
             
-            // 使用指数衰减模型预测 (基于最后观察到的峰值)
-            // SSN(t) = Peak * exp(-(t - PeakTime) / TAU)
             const timeSincePeak = nextTime - observedPeakTime;
+            let nextSSN;
             
-            // 仅对峰值后的时间应用衰减模型
             if (timeSincePeak > 0) {
                  nextSSN = observedPeakVal * Math.exp(-timeSincePeak / TAU);
             } else {
-                // 如果预测点还在峰值前（理论上不应该发生，但为安全起见），保持稳定
-                nextSSN = observedPeakVal; 
+                // 如果数据未达到峰值，预测维持在观测峰值
+                 nextSSN = observedPeakVal; 
             }
             
-            if (nextSSN < 5) nextSSN = 0; // 强制最小值为0
+            if (nextSSN < 5) nextSSN = 0; 
             
             predYears.push(nextTime);
             predSSN.push(nextSSN);
@@ -201,11 +338,7 @@
     function runPrediction(data) {
         const { predYears, predSSN, observedPeakTime, observedPeakVal } = extrapolatePrediction(data);
         
-        // 区分观测和预测数据
         const lastObservedIndex = data.years.length - 1;
-
-        const observedPredYears = predYears.slice(0, lastObservedIndex + 1);
-        const observedPredSSN = predSSN.slice(0, lastObservedIndex + 1);
         
         const futurePredYears = predYears.slice(lastObservedIndex);
         const futurePredSSN = predSSN.slice(lastObservedIndex);
@@ -213,29 +346,26 @@
         const traceRaw = {
             x: data.years, y: data.ssn,
             mode: 'markers', name: '原始月均值',
-            marker: { color: 'rgba(51, 51, 51, 0.4)', size: 4 },
-            hovertemplate: '<b>原始SSN:</b> %{y:.1f}<br><b>年份:</b> %{x:.2f}<extra></extra>'
+            marker: { color: 'rgba(51, 51, 51, 0.3)', size: 4 },
         };
 
         const traceSmooth = {
             x: data.years, y: data.ssnSmooth,
             mode: 'lines', name: '平滑观测值 (输入)',
-            line: { color: '#2a5fd8', width: 3 },
-            hovertemplate: '<b>平滑SSN:</b> %{y:.1f}<br><b>年份:</b> %{x:.2f}<extra></extra>'
+            line: { color: var(--primary-purple), width: 3 }, 
         };
 
         const traceFuture = {
             x: futurePredYears, y: futurePredSSN,
-            mode: 'lines', name: '统计外推预测',
-            line: { color: '#e63946', width: 3, dash: 'dash' },
-            hovertemplate: '<b>预测SSN:</b> %{y:.1f}<br><b>年份:</b> %{x:.2f}<extra></extra>'
+            mode: 'lines', name: 'Similar Cycles法统计外推',
+            line: { color: '#e63946', width: 3, dash: 'dash' }, 
         };
         
-        // 标注峰值
         const tracePeak = {
             x: [observedPeakTime], y: [observedPeakVal],
             mode: 'markers+text', name: '观测峰值点',
-            text: [`峰值: ${observedPeakVal.toFixed(0)}`], textposition: 'top center',
+            text: [`峰值: ${observedPeakVal.toFixed(0)} (${Math.floor(observedPeakTime)})`], 
+            textposition: 'top center',
             marker: { color: '#e63946', size: 10, symbol: 'star' },
             hoverinfo: 'skip'
         };
@@ -243,21 +373,33 @@
 
         const layout = {
             title: {
-                text: `第25太阳活动周预测 (数据更新至 ${data.years[data.years.length - 1].toFixed(2)} 年)`,
-                font: { size: 20, color: '#1a1a1a' }
+                text: `第25太阳活动周进展与预测 (数据更新至 ${data.years[data.years.length - 1].toFixed(2)} 年)`,
+                font: { size: 18, color: var(--secondary-color) }
             },
-            xaxis: { title: '年份', range: [2019, CYCLE_END_YEAR + 0.5] },
-            yaxis: { title: '太阳黑子数 (SSN)', zeroline: true, zerolinewidth: 2, zerolinecolor: '#ccc' },
+            xaxis: { 
+                title: '年份', 
+                range: [2019, CYCLE_END_YEAR + 0.5], 
+                tickformat: '.0f'
+            },
+            yaxis: { 
+                title: '太阳黑子数 (SSN)', 
+                zeroline: true, 
+                zerolinewidth: 1, 
+                zerolinecolor: '#ccc' 
+            },
             template: 'plotly_white',
             hovermode: 'x unified',
-            legend: { orientation: "h", y: 1.05, yanchor: "bottom", x: 0.5, xanchor: "center" }
+            legend: { 
+                orientation: "h", y: 1.05, yanchor: "bottom", x: 0.5, xanchor: "center" 
+            },
+            margin: { t: 50, b: 50, l: 50, r: 20 }
         };
 
         Plotly.newPlot('chart', [traceRaw, traceSmooth, traceFuture, tracePeak], layout);
     }
     
     // 初始化时显示一个空图
-    Plotly.newPlot('chart', [], { title: '等待导入数据...', xaxis: { title: '年份' }, yaxis: { title: 'SSN' } });
+    Plotly.newPlot('chart', [], { title: '请导入 SN_m_tot_V2.0.txt 文件...', height: 550 });
 
 </script>
 
